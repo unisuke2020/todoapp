@@ -68,4 +68,99 @@ function Get-ServiceData([bool]$runningOnly) {
     $svcs | Sort-Object Name
 }
 
+# ================================================================
+# TabControl
+# ================================================================
+$tabCtrl = New-Object System.Windows.Forms.TabControl
+$tabCtrl.Dock = "Fill"
+$form.Controls.Add($tabCtrl)
+
+$tabProc = New-Object System.Windows.Forms.TabPage; $tabProc.Text = "プロセス"
+$tabSvc  = New-Object System.Windows.Forms.TabPage; $tabSvc.Text  = "サービス"
+$tabCtrl.TabPages.AddRange(@($tabProc, $tabSvc))
+
+# ================================================================
+# プロセスタブ — ツールバー
+# ================================================================
+$pnlProcBar = New-Object System.Windows.Forms.Panel
+$pnlProcBar.Dock = "Top"; $pnlProcBar.Height = 36
+
+$lblInterval = New-Object System.Windows.Forms.Label
+$lblInterval.Text = "更新間隔:"
+$lblInterval.Location = New-Object System.Drawing.Point(8, 10); $lblInterval.AutoSize = $true
+
+$cboInterval = New-Object System.Windows.Forms.ComboBox
+$cboInterval.DropDownStyle = "DropDownList"; $cboInterval.Width = 72
+$cboInterval.Location = New-Object System.Drawing.Point(74, 7)
+@("1秒","3秒","5秒","10秒") | ForEach-Object { $cboInterval.Items.Add($_) | Out-Null }
+$cboInterval.SelectedIndex = 1
+
+$btnRefresh = New-Object System.Windows.Forms.Button
+$btnRefresh.Text = "更新"; $btnRefresh.Width = 60
+$btnRefresh.Location = New-Object System.Drawing.Point(156, 6)
+
+$btnKill = New-Object System.Windows.Forms.Button
+$btnKill.Text = "強制終了"; $btnKill.Width = 80
+$btnKill.Location = New-Object System.Drawing.Point(226, 6)
+
+$pnlProcBar.Controls.AddRange(@($lblInterval, $cboInterval, $btnRefresh, $btnKill))
+$tabProc.Controls.Add($pnlProcBar)
+
+# ================================================================
+# プロセスタブ — ListView
+# ================================================================
+$lvProc = New-Object System.Windows.Forms.ListView
+$lvProc.Dock = "Fill"; $lvProc.View = "Details"
+$lvProc.FullRowSelect = $true; $lvProc.GridLines = $true
+$lvProc.Font = New-Object System.Drawing.Font("Consolas", 9)
+$lvProc.Columns.Add("プロセス名", 185) | Out-Null
+$lvProc.Columns.Add("PID",         70) | Out-Null
+$lvProc.Columns.Add("CPU %",       75) | Out-Null
+$lvProc.Columns.Add("メモリ(MB)", 100) | Out-Null
+$lvProc.Columns.Add("ユーザー",   200) | Out-Null
+$tabProc.Controls.Add($lvProc)
+
+# ================================================================
+# サービスタブ — ツールバー
+# ================================================================
+$pnlSvcBar = New-Object System.Windows.Forms.Panel
+$pnlSvcBar.Dock = "Top"; $pnlSvcBar.Height = 36
+
+$chkRunning = New-Object System.Windows.Forms.CheckBox
+$chkRunning.Text = "実行中のみ"
+$chkRunning.Location = New-Object System.Drawing.Point(8, 9); $chkRunning.AutoSize = $true
+
+$btnSvcStart = New-Object System.Windows.Forms.Button
+$btnSvcStart.Text = "開始"; $btnSvcStart.Width = 60
+$btnSvcStart.Location = New-Object System.Drawing.Point(110, 6)
+
+$btnSvcStop = New-Object System.Windows.Forms.Button
+$btnSvcStop.Text = "停止"; $btnSvcStop.Width = 60
+$btnSvcStop.Location = New-Object System.Drawing.Point(180, 6)
+
+$pnlSvcBar.Controls.AddRange(@($chkRunning, $btnSvcStart, $btnSvcStop))
+$tabSvc.Controls.Add($pnlSvcBar)
+
+# ================================================================
+# サービスタブ — ListView
+# ================================================================
+$lvSvc = New-Object System.Windows.Forms.ListView
+$lvSvc.Dock = "Fill"; $lvSvc.View = "Details"
+$lvSvc.FullRowSelect = $true; $lvSvc.GridLines = $true
+$lvSvc.Font = New-Object System.Drawing.Font("Consolas", 9)
+$lvSvc.Columns.Add("サービス名", 210) | Out-Null
+$lvSvc.Columns.Add("表示名",     310) | Out-Null
+$lvSvc.Columns.Add("状態",        80) | Out-Null
+$lvSvc.Columns.Add("起動種別",   110) | Out-Null
+$tabSvc.Controls.Add($lvSvc)
+
+# ================================================================
+# ステータスバー
+# ================================================================
+$statusBar   = New-Object System.Windows.Forms.StatusStrip
+$statusLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
+$statusLabel.Text = "起動中..."
+$statusBar.Items.Add($statusLabel) | Out-Null
+$form.Controls.Add($statusBar)
+
 [void]$form.ShowDialog()
