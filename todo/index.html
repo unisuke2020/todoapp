@@ -5,25 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ToDoリスト</title>
   <style>
-    :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --accent: #0f3460;
-      --primary: #e94560;
-      --text: #eaeaea;
-      --text-muted: #888;
-      --border: #2a2a4a;
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap');
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #f8f0ff 0%, #fff0f8 50%, #f0f8ff 100%);
       min-height: 100vh;
       display: flex;
       justify-content: center;
+      font-family: 'Nunito', -apple-system, sans-serif;
     }
 
     #app {
@@ -35,41 +26,54 @@
     }
 
     header {
-      padding: 20px 16px 12px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      padding: 24px 20px 16px;
+      background: linear-gradient(135deg, #ff6fd8, #3813c2);
+      color: white;
     }
 
-    header h1 { font-size: 1.4rem; }
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
 
     .filters {
       display: flex;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      background: white;
+      padding: 10px 12px 0;
+      gap: 8px;
+      border-bottom: 2px solid #f0e0ff;
     }
 
     .filter-btn {
       flex: 1;
-      padding: 10px;
+      padding: 8px 4px;
       background: none;
       border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--text-muted);
-      font-size: 0.9rem;
+      border-bottom: 3px solid transparent;
+      color: #aaa;
+      font-size: 0.85rem;
+      font-weight: 700;
+      font-family: inherit;
       cursor: pointer;
       transition: all 0.2s;
+      border-radius: 6px 6px 0 0;
     }
 
     .filter-btn.active {
-      color: var(--primary);
-      border-bottom-color: var(--primary);
+      color: #c026d3;
+      border-bottom-color: #c026d3;
     }
 
     #todo-list {
       flex: 1;
       list-style: none;
       overflow-y: auto;
-      padding: 8px 0 72px;
+      padding: 12px 12px 80px;
+      background: transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     .todo-item {
@@ -77,13 +81,18 @@
       align-items: center;
       gap: 12px;
       padding: 14px 16px;
-      border-bottom: 1px solid var(--border);
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(180, 100, 220, 0.1);
+      transition: transform 0.15s, box-shadow 0.15s;
     }
 
+    .todo-item:active { transform: scale(0.98); }
+
     .todo-item input[type="checkbox"] {
-      width: 20px;
-      height: 20px;
-      accent-color: var(--primary);
+      width: 22px;
+      height: 22px;
+      accent-color: #c026d3;
       cursor: pointer;
       flex-shrink: 0;
     }
@@ -91,22 +100,24 @@
     .todo-item span {
       flex: 1;
       font-size: 1rem;
+      font-weight: 700;
+      color: #333;
       word-break: break-all;
     }
 
     .todo-item.done span {
       text-decoration: line-through;
-      color: var(--text-muted);
+      color: #ccc;
+      font-weight: 400;
     }
 
     .delete-btn {
       background: none;
       border: none;
-      color: var(--text-muted);
       font-size: 1.1rem;
       cursor: pointer;
-      padding: 4px 8px;
-      opacity: 0.6;
+      padding: 4px 6px;
+      opacity: 0.4;
       transition: opacity 0.2s;
       flex-shrink: 0;
     }
@@ -115,9 +126,17 @@
 
     .empty {
       text-align: center;
-      color: var(--text-muted);
-      padding: 40px 16px;
-      font-size: 0.95rem;
+      color: #ccc;
+      padding: 48px 16px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .empty::before {
+      display: block;
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      content: '🎉';
     }
 
     .input-area {
@@ -128,35 +147,50 @@
       width: 100%;
       max-width: 480px;
       display: flex;
-      gap: 8px;
+      gap: 10px;
       padding: 12px 16px;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
+      background: white;
+      border-top: 2px solid #f0e0ff;
     }
 
     #new-todo {
       flex: 1;
-      padding: 10px 14px;
-      background: var(--accent);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
+      padding: 12px 16px;
+      background: #fdf4ff;
+      border: 2px solid #e9d5ff;
+      border-radius: 24px;
+      color: #333;
       font-size: 1rem;
+      font-family: inherit;
+      font-weight: 700;
       outline: none;
+      transition: border-color 0.2s;
     }
 
-    #new-todo::placeholder { color: var(--text-muted); }
-    #new-todo:focus { border-color: var(--primary); }
+    #new-todo::placeholder { color: #ccc; font-weight: 400; }
+    #new-todo:focus { border-color: #c026d3; }
 
     #add-btn {
-      padding: 10px 18px;
-      background: var(--primary);
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #ff6fd8, #c026d3);
       border: none;
-      border-radius: 8px;
+      border-radius: 50%;
       color: white;
-      font-size: 1.3rem;
+      font-size: 1.6rem;
       font-weight: bold;
       cursor: pointer;
+      box-shadow: 0 4px 12px rgba(192, 38, 211, 0.4);
+      transition: transform 0.15s, box-shadow 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    #add-btn:active {
+      transform: scale(0.92);
+      box-shadow: 0 2px 6px rgba(192, 38, 211, 0.3);
     }
   </style>
 </head>
