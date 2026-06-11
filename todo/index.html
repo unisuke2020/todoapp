@@ -334,9 +334,14 @@
       return `${parseInt(m)}/${parseInt(d)}`;
     }
 
+    function today() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
     function isOverdue(dateStr) {
       if (!dateStr) return false;
-      return dateStr < new Date().toISOString().slice(0, 10);
+      return dateStr < today();
     }
 
     let items = load();
@@ -355,6 +360,7 @@
 
       const remaining = items.filter(i => !i.done).length;
       document.getElementById('count-badge').textContent =
+        items.length === 0 ? '' :
         remaining > 0 ? `${remaining}件残り` : 'すべて完了！';
 
       const doneCount = items.filter(i => i.done).length;
@@ -393,11 +399,15 @@
     }
 
     function toggle(id) {
+      const editing = document.querySelector('.todo-edit-input');
+      if (editing) editing.blur();
       const item = items.find(i => i.id === id);
       if (item) { item.done = !item.done; save(items); render(); }
     }
 
     function remove(id) {
+      const editing = document.querySelector('.todo-edit-input');
+      if (editing) editing.blur();
       items = items.filter(i => i.id !== id);
       save(items);
       render();
