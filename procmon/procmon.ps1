@@ -13,4 +13,61 @@ $form.ClientSize    = New-Object System.Drawing.Size(880, 560)
 $form.StartPosition = "CenterScreen"
 $form.MinimumSize   = New-Object System.Drawing.Size(700, 460)
 
+# ================================================================
+# 状態変数
+# ================================================================
+$script:prevSnapshot = @{}   # key:PID, value:@{CPU=double;Time=DateTime}
+$script:logicalCores = [int](Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).NumberOfLogicalProcessors
+if ($script:logicalCores -lt 1) { $script:logicalCores = 1 }
+$script:procSortCol  = 2;  $script:procSortAsc = $false
+$script:svcSortCol   = 0;  $script:svcSortAsc  = $true
+
+# ================================================================
+# プロセスデータ取得（CPU% = 2サンプル差分 / 経過秒 / コア数）
+# ================================================================
+function Get-ProcessData {
+    $now   = [DateTime]::Now
+    $procs = Get-Process -ErrorAction SilentlyContinue
+    $result = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+    foreach ($p in $procs) {
+        $cpuPct = 0.0
+        $prev   = $script:prevSnapshot[$p.Id]
+        if ($prev -and $null -ne $p.CPU) {
+            $elapsed = ($now - $prev.Time).TotalSeconds
+            if ($elapsed -gt 0) {
+                $cpuPct = [math]::Max(0, [math]::Round(
+                    ($p.CPU - $prev.CPU) / $elapsed / $script:logicalCores * 100, 1))
+            }
+        }
+        $result.Add([PSCustomObject]@{
+            Name  = $p.ProcessName
+            PID   = $p.Id
+            CPU   = $cpuPct
+            MemMB = [math]::Round($p.WorkingSet64 / 1MB, 1)
+            User  = try { $p.UserName } catch { "" }
+            Proc  = $p
+        })
+    }
+
+    # スナップショット更新
+    $script:prevSnapshot = @{}
+    foreach ($p in $procs) {
+        if ($null -ne $p.CPU) {
+            $script:prevSnapshot[$p.Id] = @{ CPU = $p.CPU; Time = $now }
+        }
+    }
+
+    $result | Sort-Object CPU -Descending | Select-Object -First 100
+}
+
+# ================================================================
+# サービスデータ取得
+# ================================================================
+function Get-ServiceData([bool]$runningOnly) {
+    $svcs = Get-Service -ErrorAction SilentlyContinue
+    if ($runningOnly) { $svcs = $svcs | Where-Object { $_.Status -eq 'Running' } }
+    $svcs | Sort-Object Name
+}
+
 [void]$form.ShowDialog()
