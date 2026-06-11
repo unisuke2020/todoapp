@@ -1,14 +1,11 @@
-# 管理者権限で再起動
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process pwsh -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    exit
-}
+# 管理者権限チェック（非管理者でも起動可能、一部機能が制限される）
+$script:isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text          = "プロセス & サービス モニター"
+$form.Text          = if ($script:isAdmin) { "プロセス & サービス モニター [管理者]" } else { "プロセス & サービス モニター [非管理者 — 一部機能制限]" }
 $form.ClientSize    = New-Object System.Drawing.Size(880, 560)
 $form.StartPosition = "CenterScreen"
 $form.MinimumSize   = New-Object System.Drawing.Size(700, 460)
@@ -213,6 +210,10 @@ $btnKill.Add_Click({
         "$($d.Name) (PID: $($d.PID)) を強制終了しますか？",
         "確認", "YesNo", "Warning")
     if ($ans -eq "Yes") {
+        if (-not $script:isAdmin) {
+            [System.Windows.Forms.MessageBox]::Show("管理者権限が必要です。管理者として実行してください。", "権限不足", "OK", "Warning")
+            return
+        }
         try   { Stop-Process -Id $d.PID -Force -ErrorAction Stop }
         catch { [System.Windows.Forms.MessageBox]::Show("終了できません:`n$_", "エラー", "OK", "Error") }
         Update-ProcListView
@@ -255,6 +256,7 @@ $lvSvc.Add_ColumnClick({
 # サービス開始
 $btnSvcStart.Add_Click({
     if ($lvSvc.SelectedItems.Count -eq 0) { return }
+    if (-not $script:isAdmin) { [System.Windows.Forms.MessageBox]::Show("管理者権限が必要です。", "権限不足", "OK", "Warning"); return }
     $name = $lvSvc.SelectedItems[0].Tag
     try   { Start-Service -Name $name -ErrorAction Stop; Update-SvcListView }
     catch { [System.Windows.Forms.MessageBox]::Show("開始できません:`n$_", "エラー", "OK", "Error") }
@@ -267,6 +269,7 @@ $btnSvcStop.Add_Click({
     $ans  = [System.Windows.Forms.MessageBox]::Show(
         "$name を停止しますか？", "確認", "YesNo", "Warning")
     if ($ans -eq "Yes") {
+        if (-not $script:isAdmin) { [System.Windows.Forms.MessageBox]::Show("管理者権限が必要です。", "権限不足", "OK", "Warning"); return }
         try   { Stop-Service -Name $name -Force -ErrorAction Stop; Update-SvcListView }
         catch { [System.Windows.Forms.MessageBox]::Show("停止できません:`n$_", "エラー", "OK", "Error") }
     }
