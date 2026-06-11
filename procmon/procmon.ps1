@@ -26,18 +26,20 @@ $script:svcSortCol   = 0;  $script:svcSortAsc  = $true
 # プロセスデータ取得（CPU% = 2サンプル差分 / 経過秒 / コア数）
 # ================================================================
 function Get-ProcessData {
-    $now   = [DateTime]::Now
-    $procs = Get-Process -ErrorAction SilentlyContinue
-    $result = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $now        = [DateTime]::Now
+    $procs      = Get-Process -ErrorAction SilentlyContinue
+    $result     = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $newSnapshot = @{}
 
     foreach ($p in $procs) {
         $cpuPct = 0.0
+        $cpuNow = $p.CPU
         $prev   = $script:prevSnapshot[$p.Id]
-        if ($prev -and $null -ne $p.CPU) {
+        if ($prev -and $null -ne $cpuNow) {
             $elapsed = ($now - $prev.Time).TotalSeconds
             if ($elapsed -gt 0) {
                 $cpuPct = [math]::Max(0, [math]::Round(
-                    ($p.CPU - $prev.CPU) / $elapsed / $script:logicalCores * 100, 1))
+                    ($cpuNow - $prev.CPU) / $elapsed / $script:logicalCores * 100, 1))
             }
         }
         $result.Add([PSCustomObject]@{
@@ -48,16 +50,12 @@ function Get-ProcessData {
             User  = try { $p.UserName } catch { "" }
             Proc  = $p
         })
-    }
-
-    # スナップショット更新
-    $script:prevSnapshot = @{}
-    foreach ($p in $procs) {
-        if ($null -ne $p.CPU) {
-            $script:prevSnapshot[$p.Id] = @{ CPU = $p.CPU; Time = $now }
+        if ($null -ne $cpuNow) {
+            $newSnapshot[$p.Id] = @{ CPU = $cpuNow; Time = $now }
         }
     }
 
+    $script:prevSnapshot = $newSnapshot
     $result | Sort-Object CPU -Descending | Select-Object -First 100
 }
 
