@@ -271,4 +271,36 @@ $btnSvcStop.Add_Click({
     }
 })
 
+# ================================================================
+# タイマー
+# ================================================================
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 3000
+
+$intervalMap = @{ "1秒" = 1000; "3秒" = 3000; "5秒" = 5000; "10秒" = 10000 }
+
+$cboInterval.Add_SelectedIndexChanged({
+    $timer.Interval = $intervalMap[$cboInterval.SelectedItem]
+})
+
+$timer.Add_Tick({
+    if ($tabCtrl.SelectedTab -eq $tabProc) { Update-ProcListView } else { Update-SvcListView }
+    $statusLabel.Text = "最終更新: $([DateTime]::Now.ToString('HH:mm:ss'))  プロセス数: $($lvProc.Items.Count)"
+})
+
+$btnRefresh.Add_Click({
+    if ($tabCtrl.SelectedTab -eq $tabProc) { Update-ProcListView } else { Update-SvcListView }
+    $statusLabel.Text = "最終更新: $([DateTime]::Now.ToString('HH:mm:ss'))  プロセス数: $($lvProc.Items.Count)"
+})
+
+$form.Add_FormClosing({ $timer.Stop(); $timer.Dispose() })
+
+# ================================================================
+# 初回データ取得 & タイマー開始
+# ================================================================
+Update-ProcListView
+Update-SvcListView
+$statusLabel.Text = "最終更新: $([DateTime]::Now.ToString('HH:mm:ss'))  プロセス数: $($lvProc.Items.Count)"
+$timer.Start()
+
 [void]$form.ShowDialog()
