@@ -1,0 +1,533 @@
+# Todo機能拡張 実装計画
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 既存の `todo/index.html` にインライン編集・優先度・期限日・完了一括削除・残件数バッジの5機能を追加する。
+
+**Architecture:** 単一HTMLファイルを完全置換する形で実装。データ構造を `{id, text, done, priority, dueDate}` に拡張し、既存 localStorage データとの後方互換を `load()` で保証する。
+
+**Tech Stack:** バニラHTML/CSS/JS、localStorage
+
+---
+
+## ファイル構成
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `todo/index.html` | HTML構造・CSS・JS をすべて更新（単一ファイル完全置換） |
+
+---
+
+### Task 1: `todo/index.html` を完全置換する
+
+**Files:**
+- Modify: `todo/index.html`
+
+- [ ] **Step 1: ファイル全体を以下の内容に置き換える**
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ToDoリスト</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: linear-gradient(135deg, #f8f0ff 0%, #fff0f8 50%, #f0f8ff 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      font-family: 'Nunito', -apple-system, sans-serif;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 20px 20px 14px;
+      background: linear-gradient(135deg, #ff6fd8, #3813c2);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 { font-size: 1.5rem; font-weight: 800; }
+
+    #count-badge {
+      background: rgba(255,255,255,0.25);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      background: white;
+      padding: 0 12px;
+      border-bottom: 2px solid #f0e0ff;
+    }
+
+    .filter-tabs { display: flex; flex: 1; }
+
+    .filter-btn {
+      flex: 1;
+      padding: 10px 4px;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: #aaa;
+      font-size: 0.85rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active { color: #c026d3; border-bottom-color: #c026d3; }
+
+    #clear-done {
+      background: none;
+      border: none;
+      font-size: 0.8rem;
+      font-weight: 700;
+      font-family: inherit;
+      color: #f43f5e;
+      cursor: pointer;
+      padding: 8px 0 8px 12px;
+      white-space: nowrap;
+      opacity: 0.8;
+    }
+
+    #clear-done:hover { opacity: 1; }
+    #clear-done.hidden { display: none; }
+
+    #todo-list {
+      flex: 1;
+      list-style: none;
+      overflow-y: auto;
+      padding: 12px 12px 130px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(180,100,220,0.1);
+      transition: transform 0.15s;
+    }
+
+    .todo-item:active { transform: scale(0.98); }
+
+    .todo-item input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      accent-color: #c026d3;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .priority-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .priority-dot.high   { background: #f43f5e; }
+    .priority-dot.medium { background: #f59e0b; }
+    .priority-dot.low    { background: #22c55e; }
+
+    .todo-content {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .todo-text {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #333;
+      word-break: break-all;
+      cursor: pointer;
+    }
+
+    .todo-item.done .todo-text {
+      text-decoration: line-through;
+      color: #ccc;
+      font-weight: 400;
+    }
+
+    .todo-edit-input {
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: inherit;
+      color: #333;
+      border: 2px solid #c026d3;
+      border-radius: 8px;
+      padding: 2px 6px;
+      outline: none;
+      width: 100%;
+    }
+
+    .due-date {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #aaa;
+    }
+
+    .due-date.overdue { color: #f43f5e; }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 4px 6px;
+      opacity: 0.35;
+      transition: opacity 0.2s;
+      flex-shrink: 0;
+    }
+
+    .delete-btn:hover { opacity: 1; }
+
+    .empty {
+      text-align: center;
+      color: #ccc;
+      padding: 48px 16px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .empty::before { display: block; font-size: 2.5rem; margin-bottom: 10px; content: '🎉'; }
+
+    .input-area {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      background: white;
+      border-top: 2px solid #f0e0ff;
+      padding: 10px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .input-options { display: flex; gap: 8px; align-items: center; }
+
+    .priority-selector { display: flex; gap: 4px; }
+
+    .priority-selector button {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      background: #f3f4f6;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .priority-selector button.selected { border-color: #c026d3; background: #fdf4ff; }
+
+    #due-input {
+      flex: 1;
+      padding: 6px 10px;
+      border: 2px solid #e9d5ff;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      color: #555;
+      outline: none;
+      background: #fdf4ff;
+    }
+
+    #due-input:focus { border-color: #c026d3; }
+
+    .input-row { display: flex; gap: 10px; }
+
+    #new-todo {
+      flex: 1;
+      padding: 12px 16px;
+      background: #fdf4ff;
+      border: 2px solid #e9d5ff;
+      border-radius: 24px;
+      color: #333;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: 700;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #new-todo::placeholder { color: #ccc; font-weight: 400; }
+    #new-todo:focus { border-color: #c026d3; }
+
+    #add-btn {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #ff6fd8, #c026d3);
+      border: none;
+      border-radius: 50%;
+      color: white;
+      font-size: 1.6rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(192,38,211,0.4);
+      transition: transform 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    #add-btn:active { transform: scale(0.92); }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>📝 ToDoリスト</h1>
+      <span id="count-badge"></span>
+    </header>
+    <div class="filters">
+      <div class="filter-tabs">
+        <button class="filter-btn active" data-filter="all">すべて</button>
+        <button class="filter-btn" data-filter="active">未完了</button>
+        <button class="filter-btn" data-filter="done">完了済み</button>
+      </div>
+      <button id="clear-done" class="hidden">完了を削除</button>
+    </div>
+    <ul id="todo-list"></ul>
+    <div class="input-area">
+      <div class="input-options">
+        <div class="priority-selector">
+          <button data-priority="high" title="高">🔴</button>
+          <button data-priority="medium" class="selected" title="中">🟡</button>
+          <button data-priority="low" title="低">🟢</button>
+        </div>
+        <input type="date" id="due-input">
+      </div>
+      <div class="input-row">
+        <input type="text" id="new-todo" placeholder="新しいタスク…">
+        <button id="add-btn">+</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const STORAGE_KEY = 'todo-items';
+
+    function load() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        return raw.map(item => ({ priority: 'medium', dueDate: null, ...item }));
+      } catch { return []; }
+    }
+
+    function save(items) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const [, m, d] = dateStr.split('-');
+      return `${parseInt(m)}/${parseInt(d)}`;
+    }
+
+    function isOverdue(dateStr) {
+      if (!dateStr) return false;
+      return dateStr < new Date().toISOString().slice(0, 10);
+    }
+
+    let items = load();
+    let filter = 'all';
+    let currentPriority = 'medium';
+
+    function filtered() {
+      if (filter === 'active') return items.filter(i => !i.done);
+      if (filter === 'done')   return items.filter(i => i.done);
+      return items;
+    }
+
+    function render() {
+      const list = document.getElementById('todo-list');
+      const visible = filtered();
+
+      const remaining = items.filter(i => !i.done).length;
+      document.getElementById('count-badge').textContent =
+        remaining > 0 ? `${remaining}件残り` : 'すべて完了！';
+
+      const doneCount = items.filter(i => i.done).length;
+      document.getElementById('clear-done').classList.toggle('hidden', doneCount === 0);
+
+      if (visible.length === 0) {
+        list.innerHTML = '<li class="empty">タスクはありません</li>';
+        return;
+      }
+
+      list.innerHTML = visible.map(item => {
+        const dueDateHtml = item.dueDate
+          ? `<span class="due-date${isOverdue(item.dueDate) && !item.done ? ' overdue' : ''}">📅 ${formatDate(item.dueDate)}</span>`
+          : '';
+        return `
+          <li class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}">
+            <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggle(${item.id})">
+            <span class="priority-dot ${item.priority}"></span>
+            <div class="todo-content">
+              <span class="todo-text" onclick="startEdit(${item.id})">${escapeHtml(item.text)}</span>
+              ${dueDateHtml}
+            </div>
+            <button class="delete-btn" onclick="remove(${item.id})">🗑</button>
+          </li>`;
+      }).join('');
+    }
+
+    render();
+
+    function addItem(text, priority, dueDate) {
+      text = text.trim();
+      if (!text) return;
+      items.push({ id: Date.now(), text, done: false, priority, dueDate: dueDate || null });
+      save(items);
+      render();
+    }
+
+    function toggle(id) {
+      const item = items.find(i => i.id === id);
+      if (item) { item.done = !item.done; save(items); render(); }
+    }
+
+    function remove(id) {
+      items = items.filter(i => i.id !== id);
+      save(items);
+      render();
+    }
+
+    function startEdit(id) {
+      const li = document.querySelector(`[data-id="${id}"]`);
+      if (!li) return;
+      const span = li.querySelector('.todo-text');
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'todo-edit-input';
+      input.value = item.text;
+      span.replaceWith(input);
+      input.focus();
+      input.select();
+
+      const finish = () => {
+        const newText = input.value.trim();
+        if (newText) { item.text = newText; save(items); }
+        render();
+      };
+
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') finish();
+        if (e.key === 'Escape') render();
+      });
+      input.addEventListener('blur', finish);
+    }
+
+    function clearDone() {
+      items = items.filter(i => !i.done);
+      save(items);
+      render();
+    }
+
+    function setFilter(f) {
+      filter = f;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === f);
+      });
+      render();
+    }
+
+    document.querySelectorAll('.priority-selector button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentPriority = btn.dataset.priority;
+        document.querySelectorAll('.priority-selector button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      });
+    });
+
+    document.getElementById('add-btn').addEventListener('click', () => {
+      const input = document.getElementById('new-todo');
+      const due = document.getElementById('due-input').value;
+      addItem(input.value, currentPriority, due);
+      input.value = '';
+      document.getElementById('due-input').value = '';
+      input.focus();
+    });
+
+    document.getElementById('new-todo').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const due = document.getElementById('due-input').value;
+        addItem(e.target.value, currentPriority, due);
+        e.target.value = '';
+        document.getElementById('due-input').value = '';
+      }
+    });
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => setFilter(btn.dataset.filter));
+    });
+
+    document.getElementById('clear-done').addEventListener('click', clearDone);
+  </script>
+</body>
+</html>
+```
+
+- [ ] **Step 2: ブラウザで全機能を手動テストする**
+
+`todo/index.html` をブラウザで開いて以下を確認:
+
+1. **残件数バッジ**: ヘッダー右に「N件残り」が表示される。全完了時は「すべて完了！」になる
+2. **優先度選択**: 🔴🟡🟢 を切り替えてからタスク追加 → タスク行に色ドットが表示される
+3. **期限日**: 日付を選んでタスク追加 → タスク行に「📅 6/15」形式で表示される
+4. **期限切れ**: 過去日付で追加 → 日付が赤く表示される（完了済みは赤にならない）
+5. **インライン編集**: タスクテキストをクリック → 入力欄になる → Enter で確定 → Escapeでキャンセル → blur（他をクリック）でも確定される
+6. **完了を削除**: 何個か完了にすると「完了を削除」ボタンが現れる → クリックで完了タスクが全消去される → 完了0件でボタンが消える
+7. **後方互換**: localStorage に `[{"id":1,"text":"test","done":false}]` を手動セットしてリロード → priority dot と due date なしでエラーなく表示される
+8. **既存機能が壊れていない**: フィルター・削除・Enterキー追加が正常動作する
+
+- [ ] **Step 3: コミットしてpushする**
+
+```bash
+git add todo/index.html
+git commit -m "feat(todo): add inline edit, priority, due date, clear done, count badge"
+git push
+```
+
+Expected: `master -> master` にpush成功
