@@ -163,4 +163,112 @@ $statusLabel.Text = "起動中..."
 $statusBar.Items.Add($statusLabel) | Out-Null
 $form.Controls.Add($statusBar)
 
+# ================================================================
+# プロセス ListView 更新
+# ================================================================
+function Update-ProcListView {
+    $data = Get-ProcessData
+    $lvProc.BeginUpdate(); $lvProc.Items.Clear()
+    foreach ($d in $data) {
+        $item = New-Object System.Windows.Forms.ListViewItem($d.Name)
+        $item.SubItems.Add($d.PID.ToString())       | Out-Null
+        $item.SubItems.Add("$($d.CPU) %")           | Out-Null
+        $item.SubItems.Add($d.MemMB.ToString("N1")) | Out-Null
+        $item.SubItems.Add($d.User)                 | Out-Null
+        $item.Tag = $d
+        if ($d.CPU -ge 20) {
+            $item.BackColor = [System.Drawing.Color]::FromArgb(255, 200, 200)
+        } elseif ($d.CPU -ge 5) {
+            $item.BackColor = [System.Drawing.Color]::FromArgb(255, 230, 180)
+        }
+        $lvProc.Items.Add($item) | Out-Null
+    }
+    $lvProc.EndUpdate()
+}
+
+# プロセス列ソート
+$lvProc.Add_ColumnClick({
+    param($s, $e)
+    if ($script:procSortCol -eq $e.Column) { $script:procSortAsc = -not $script:procSortAsc }
+    else { $script:procSortCol = $e.Column; $script:procSortAsc = $false }
+    $items  = @($lvProc.Items | ForEach-Object { $_ })
+    $sorted = switch ($script:procSortCol) {
+        0 { $items | Sort-Object { $_.Text }                                           -Descending:(-not $script:procSortAsc) }
+        1 { $items | Sort-Object { [int]$_.SubItems[1].Text }                          -Descending:(-not $script:procSortAsc) }
+        2 { $items | Sort-Object { [double]($_.SubItems[2].Text -replace ' %', '') }   -Descending:(-not $script:procSortAsc) }
+        3 { $items | Sort-Object { [double]$_.SubItems[3].Text }                       -Descending:(-not $script:procSortAsc) }
+        4 { $items | Sort-Object { $_.SubItems[4].Text }                               -Descending:(-not $script:procSortAsc) }
+    }
+    $lvProc.BeginUpdate(); $lvProc.Items.Clear()
+    $sorted | ForEach-Object { $lvProc.Items.Add($_) | Out-Null }
+    $lvProc.EndUpdate()
+})
+
+# 強制終了
+$btnKill.Add_Click({
+    if ($lvProc.SelectedItems.Count -eq 0) { return }
+    $d   = $lvProc.SelectedItems[0].Tag
+    $ans = [System.Windows.Forms.MessageBox]::Show(
+        "$($d.Name) (PID: $($d.PID)) を強制終了しますか？",
+        "確認", "YesNo", "Warning")
+    if ($ans -eq "Yes") {
+        try   { Stop-Process -Id $d.PID -Force -ErrorAction Stop }
+        catch { [System.Windows.Forms.MessageBox]::Show("終了できません:`n$_", "エラー", "OK", "Error") }
+        Update-ProcListView
+    }
+})
+
+# ================================================================
+# サービス ListView 更新
+# ================================================================
+function Update-SvcListView {
+    $svcs = Get-ServiceData $chkRunning.Checked
+    $lvSvc.BeginUpdate(); $lvSvc.Items.Clear()
+    foreach ($s in $svcs) {
+        $item = New-Object System.Windows.Forms.ListViewItem($s.Name)
+        $item.SubItems.Add($s.DisplayName)          | Out-Null
+        $item.SubItems.Add($s.Status.ToString())    | Out-Null
+        $item.SubItems.Add($s.StartType.ToString()) | Out-Null
+        $item.Tag = $s.Name
+        if ($s.Status -eq 'Running') { $item.ForeColor = [System.Drawing.Color]::DarkGreen }
+        $lvSvc.Items.Add($item) | Out-Null
+    }
+    $lvSvc.EndUpdate()
+}
+
+# 実行中のみフィルタ
+$chkRunning.Add_CheckedChanged({ Update-SvcListView })
+
+# サービス列ソート
+$lvSvc.Add_ColumnClick({
+    param($s, $e)
+    if ($script:svcSortCol -eq $e.Column) { $script:svcSortAsc = -not $script:svcSortAsc }
+    else { $script:svcSortCol = $e.Column; $script:svcSortAsc = $true }
+    $items  = @($lvSvc.Items | ForEach-Object { $_ })
+    $sorted = $items | Sort-Object { $_.SubItems[$e.Column].Text } -Descending:(-not $script:svcSortAsc)
+    $lvSvc.BeginUpdate(); $lvSvc.Items.Clear()
+    $sorted | ForEach-Object { $lvSvc.Items.Add($_) | Out-Null }
+    $lvSvc.EndUpdate()
+})
+
+# サービス開始
+$btnSvcStart.Add_Click({
+    if ($lvSvc.SelectedItems.Count -eq 0) { return }
+    $name = $lvSvc.SelectedItems[0].Tag
+    try   { Start-Service -Name $name -ErrorAction Stop; Update-SvcListView }
+    catch { [System.Windows.Forms.MessageBox]::Show("開始できません:`n$_", "エラー", "OK", "Error") }
+})
+
+# サービス停止
+$btnSvcStop.Add_Click({
+    if ($lvSvc.SelectedItems.Count -eq 0) { return }
+    $name = $lvSvc.SelectedItems[0].Tag
+    $ans  = [System.Windows.Forms.MessageBox]::Show(
+        "$name を停止しますか？", "確認", "YesNo", "Warning")
+    if ($ans -eq "Yes") {
+        try   { Stop-Service -Name $name -Force -ErrorAction Stop; Update-SvcListView }
+        catch { [System.Windows.Forms.MessageBox]::Show("停止できません:`n$_", "エラー", "OK", "Error") }
+    }
+})
+
 [void]$form.ShowDialog()
