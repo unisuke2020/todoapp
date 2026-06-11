@@ -424,11 +424,12 @@
         render();
       };
 
+      let cancelled = false;
       input.addEventListener('keydown', e => {
         if (e.key === 'Enter') finish();
-        if (e.key === 'Escape') render();
+        if (e.key === 'Escape') { cancelled = true; render(); }
       });
-      input.addEventListener('blur', finish);
+      input.addEventListener('blur', () => { if (!cancelled) finish(); });
     }
 
     function clearDone() {
