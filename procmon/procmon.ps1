@@ -42,12 +42,13 @@ function Get-ProcessData {
                     ($cpuNow - $prev.CPU) / $elapsed / $script:logicalCores * 100, 1))
             }
         }
+        $user = try { $p.UserName } catch { "" }
         $result.Add([PSCustomObject]@{
             Name  = $p.ProcessName
             PID   = $p.Id
             CPU   = $cpuPct
             MemMB = [math]::Round($p.WorkingSet64 / 1MB, 1)
-            User  = try { $p.UserName } catch { "" }
+            User  = $user
             Proc  = $p
         })
         if ($null -ne $cpuNow) {
