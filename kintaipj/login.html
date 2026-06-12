@@ -1,0 +1,46 @@
+﻿<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"> 
+    <title>勤怠システム</title>
+    <link rel="stylesheet" href="milligram.min.css" />
+    <style>
+      .header-title {
+        padding: 10px;
+        margin-bottom: 100px;
+        font-size: 18px;
+        border-bottom: 1px solid #aaa;
+      }
+      .hide {
+        display: none;
+      }
+      #info {
+        text-align: center;
+        font-size: 4em;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="header-title">勤怠システム<</h1>
+    
+    <div class="container">
+      <div id="input-area">
+        <input id="" type="text" placeholder="ユーザー名を入力" required/>
+        <input id="password" type="password" placeholder="パスワードを入力" required/>
+        <button id="login">ログイン</button>
+        <button id="newuser">新規登録</button>
+      </div>
+      <button id="logout" class="hide">ログアウト</button>
+    </div>
+    
+    <!-- テキスト表示用 -->
+    <p id="info"></p>
+    
+    
+    <script src="https://www.gstatic.com/firebasejs/7.14.5/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/7.14.5/firebase-auth.js"></script> 
+    <script src="app.js"></script>
+  </body>
+</html>

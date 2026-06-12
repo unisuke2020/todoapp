@@ -1,0 +1,263 @@
+# DSInternalsのインストール
+Install-Module -Name DSInternals -Force
+
+$account = Get-ADReplAccount -SamAccountName user01 -Server localhost
+
+# SupplementalCredentialsの中身を確認
+$account.SupplementalCredentials
+-----------
+# 設定するユーザー情報
+$Username = "administrator"      # 自動ログオンしたいユーザー名
+$Password = "TS12345!"  # ユーザーのパスワード
+$Domain   = "contoso2022.local"  # ドメイン名またはローカルコンピュータ名（ローカルの場合はコンピュータ名）
+
+# レジストリパス
+$RegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+$PoliciesPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+
+# レジストリの設定
+# Ctrl+Alt+Del不要の設定値
+$DisableCAD = 1  # 1にするとCtrl+Alt+Delが不要になる
+
+Set-ItemProperty -Path $RegPath -Name "AutoAdminLogon" -Value "1" -Type String
+Set-ItemProperty -Path $RegPath -Name "DefaultUserName" -Value $Username -Type String
+Set-ItemProperty -Path $RegPath -Name "DefaultPassword" -Value $Password -Type String
+Set-ItemProperty -Path $RegPath -Name "DefaultDomainName" -Value $Domain -Type String
+Set-ItemProperty -Path $PoliciesPath -Name "DisableCAD" -Value $DisableCAD
+
+# Optional: Clear AutoLogonCount if set
+Remove-ItemProperty -Path $RegPath -Name "AutoLogonCount" -ErrorAction SilentlyContinue
+
+Write-Host "自動ログオンの設定が完了しました。"
+
+#■■■■■■IP
+New-NetIPAddress -InterfaceAlias "イーサネット" -IPAddress "192.168.22.10" -PrefixLength "24"
+
+#DNSの設定
+Set-DnsClientServerAddress -InterfaceAlias "イーサネット" -ServerAddresses "192.168.22.10"
+
+#■■■■■■DC
+# AD DSの役割をインストール
+Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
+
+# ドメイン情報を変数で指定（必要に応じて書き換え）
+$domainName = "contoso2022.local"
+$safeModePassword = ConvertTo-SecureString "TS12345!" -AsPlainText -Force  # DSRM用パスワード
+
+# 最初のドメインコントローラー（新しいフォレスト）として昇格
+Install-ADDSForest `
+    -DomainName $domainName `
+    -SafeModeAdministratorPassword $safeModePassword `
+    -InstallDNS `
+    -Force
+■■■■■■2台目DC
+#
+#
+# AD DS 配置用の Windows PowerShell スクリプト
+#
+
+Import-Module ADDSDeployment
+Install-ADDSDomainController `
+-NoGlobalCatalog:$false `
+-CreateDnsDelegation:$false `
+-Credential (Get-Credential) `
+-CriticalReplicationOnly:$false `
+-DatabasePath "C:\Windows\NTDS" `
+-DomainName "contoso2022.local" `
+-InstallDns:$true `
+-LogPath "C:\Windows\NTDS" `
+-NoRebootOnCompletion:$false `
+-SiteName "Default-First-Site-Name" `
+-SysvolPath "C:\Windows\SYSVOL" `
+-Force:$true
+
+#■■■■■■iSCSターゲット
+### --- 2. iSCSIターゲットの役割インストール --- ###
+
+Install-WindowsFeature -Name FS-iSCSITarget-Server -IncludeManagementTools
+
+
+### --- 3. 仮想ディスクの作成 --- ###
+
+# 仮想ディスクの保存先フォルダー（存在しない場合は作成）
+$diskPath = "C:\iSCSIVirtualDisks"
+if (-not (Test-Path $diskPath)) {
+    New-Item -ItemType Directory -Path $diskPath
+}
+
+# 仮想ディスクファイル
+$virtualDisk = "$diskPath\Disk01.vhdx"
+
+# 仮想ディスクのサイズ（10GB）
+New-IscsiVirtualDisk -Path $virtualDisk -Size 10GB
+
+
+### --- 4. iSCSIターゲットの作成と割り当て --- ###
+
+# iSCSIターゲット名
+$targetName = "Target01"
+
+# 接続を許可するクライアントのIPアドレスリスト
+$initiatorIPs = @(
+    "10.10.22.11",
+    "10.10.22.12"
+)
+
+# IPアドレス形式の Initiator ID に変換
+$initiatorIdList = $initiatorIPs | ForEach-Object { "IPAddress:$_" }
+
+# iSCSIターゲットを作成（複数IPアドレス許可）
+New-IscsiServerTarget -TargetName $targetName -InitiatorIds $initiatorIdList
+
+# 仮想ディスクパス（例）
+$virtualDisk = "C:\iSCSIVirtualDisks\Disk01.vhdx"
+
+# 仮想ディスクをターゲットに関連付け
+Add-IscsiVirtualDiskTargetMapping -TargetName $targetName -Path $virtualDisk
+
+Write-Host "複数IPを許可したiSCSIターゲットの作成が完了しました。" -ForegroundColor Green
+
+#■iscsi イニシエーター
+
+# サービスが起動していなければ起動
+Start-Service -Name MSiSCSI
+
+# 自動起動に設定（再起動後も有効にする）
+Set-Service -Name MSiSCSI -StartupType Automatic
+
+# サービスが起動していなければ起動
+Start-Service -Name MSiSCSI
+
+# 自動起動に設定（再起動後も有効にする）
+Set-Service -Name MSiSCSI -StartupType Automatic
+
+# ターゲット設定
+New-IscsiTargetPortal -TargetPortalAddress "10.10.22.10"
+$target = Get-IscsiTarget | Where-Object {$_.NodeAddress -like "iqn.1991-05.com.microsoft:win2022dc-target01-target"}
+Connect-IscsiTarget -NodeAddress $target.NodeAddress -IsPersistent $true
+
+# ディスク初期化とマウント（必要に応じて）
+Get-Disk | Where-Object IsOffline -Eq $true | Set-Disk -IsOffline $false
+Get-Disk | Where-Object PartitionStyle -Eq 'RAW' | Initialize-Disk -PartitionStyle GPT
+Get-Disk | Where-Object PartitionStyle -Eq 'GPT' | ForEach-Object {
+    New-Partition -DiskNumber $_.Number -UseMaximumSize -AssignDriveLetter |
+    Format-Volume -FileSystem NTFS -NewFileSystemLabel "クォーラム" -Confirm:$false
+}
+
+#■■■■■■メンバーサーバーIP
+New-NetIPAddress -InterfaceAlias "イーサネット" -IPAddress "192.168.22.11" -PrefixLength "24"
+
+#DNSの設定
+Set-DnsClientServerAddress -InterfaceAlias "イーサネット" -ServerAddresses "192.168.22.10"
+
+Start-Sleep -Seconds 5
+
+# ユーザー名とパスワード（SecureString）を定義
+$username = "contoso2022\administrator"
+$password = ConvertTo-SecureString "TS12345!" -AsPlainText -Force
+$credential = New-Object System.Management.Automation.PSCredential ($username, $password)
+
+# ドメイン参加
+Add-Computer -DomainName "contoso2022.local" -Credential $credential -Restart
+
+#■2台目
+New-NetIPAddress -InterfaceAlias "イーサネット" -IPAddress "192.168.22.12" -PrefixLength "24"
+
+#DNSの設定
+Set-DnsClientServerAddress -InterfaceAlias "イーサネット" -ServerAddresses "192.168.22.10"
+
+Start-Sleep -Seconds 5
+
+# ユーザー名とパスワード（SecureString）を定義
+$username = "contoso2022\administrator"
+$password = ConvertTo-SecureString "TS12345!" -AsPlainText -Force
+$credential = New-Object System.Management.Automation.PSCredential ($username, $password)
+
+# ドメイン参加
+Add-Computer -DomainName "contoso2022.local" -Credential $credential -Restart
+
+#■■■■■■Hyper-vとクラスタの役割追加
+
+Set-VMProcessor -VMName win2022clus1 -ExposeVirtualizationExtensions $true
+
+# Hyper-V および クラスタ機能をインストール（GUI管理ツール含む）
+Install-WindowsFeature -Name Hyper-V, Failover-Clustering -IncludeManagementTools -Restart
+
+# クラスタの構成
+$clusterName = "2022clus"
+$nodes = "win2022clus1", "win2022clus2"             # クラスタに参加させるノード名
+$ipAddress = "192.168.22.9"          # クラスタの名前付きIPアドレス（管理用）
+
+# クラスタ作成
+New-Cluster -Name $clusterName -Node $nodes -StaticAddress $ipAddress
+
+
+#■■■■■■RDS構成
+# --- 変数定義 ---
+$ConnectionBroker = "win2022RDSsb.contosoRDS.local"
+$WebAccessServer = "win2022RDSsb.contosoRDS.local"
+$LicenseServer = "win2022RDSsb.contosoRDS.local"
+$SessionHost = "win2022RDSSH.contosoRDS.local"
+$CollectionName = "AppCollection"
+$CollectionDesc = "Test collection with notepad"
+$UserGroup = "Domain Users"  # アクセス許可を与えるグループ
+
+# --- 1. RDS関連の役割をインストール ---
+$servers = @($ConnectionBroker, $SessionHost)
+foreach ($srv in $servers) {
+    Invoke-Command -ComputerName $srv -ScriptBlock {
+        Install-WindowsFeature -Name RDS-RD-Server -IncludeManagementTools -Restart:$false
+    }
+}
+# ブローカー／ライセンス／Webアクセスの役割をまとめて追加
+Invoke-Command -ComputerName $ConnectionBroker -ScriptBlock {
+    Install-WindowsFeature -Name RDS-Connection-Broker, RDS-Web-Access, RDS-Licensing -IncludeManagementTools -Restart:$false
+}
+
+#★再起動必要。セッションホストを管理サーバーへ追加が必要、
+
+# --- 2. RDS標準デプロイを作成 ---
+New-RDSessionDeployment `
+    -ConnectionBroker $ConnectionBroker `
+    -SessionHost $SessionHost `
+    -WebAccessServer $WebAccessServer
+
+# --- 3. ライセンスサーバーを追加 + ライセンスモード設定（PerUser） ---
+Add-RDServer `
+    -Server $LicenseServer `
+    -Role RDS-Licensing `
+    -ConnectionBroker $ConnectionBroker
+
+Set-RDLicenseConfiguration `
+    -LicenseServer $LicenseServer `
+    -Mode PerUser `
+    -ConnectionBroker $ConnectionBroker
+
+# --- 4. セッションコレクション作成 ---
+New-RDSessionCollection `
+    -CollectionName $CollectionName `
+    -SessionHost $SessionHost `
+    -ConnectionBroker $ConnectionBroker `
+    -CollectionDescription $CollectionDesc
+
+# --- 5. 公開アプリ（メモ帳）を追加 ---
+New-RDRemoteApp `
+    -Alias "Notepad" `
+    -DisplayName "メモ帳" `
+    -FilePath "C:\Windows\System32\notepad.exe" `
+    -CollectionName $CollectionName `
+    -ConnectionBroker $ConnectionBroker
+
+# --- 6. Webアクセス許可ユーザーを設定 ---
+Set-RDWebAccessUser `
+    -UserGroup $UserGroup `
+    -CollectionName $CollectionName `
+    -ConnectionBroker $ConnectionBroker
+
+# --- 7. 結果確認 ---
+Write-Host "`n===== 構成完了！ =====`n"
+Get-RDDeployment
+Get-RDSessionCollection -ConnectionBroker $ConnectionBroker
+Get-RDRemoteApp -CollectionName $CollectionName -ConnectionBroker $ConnectionBroker
+
+

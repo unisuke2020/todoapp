@@ -1,0 +1,60 @@
+{
+  "RoleCluster": false,
+  "DSRMPass": "TS12345!",
+  "RoleHyperV": false,
+  "ISCSITargetName": "Target01",
+  "NICData": [
+    {
+      "Prefix": 24,
+      "DNS": "192.168.22.10",
+      "IP": "192.168.22.10",
+      "Switch": "Default Switch",
+      "GW": ""
+    },
+    {
+      "Prefix": 24,
+      "DNS": "",
+      "IP": "",
+      "Switch": "Default Switch",
+      "GW": ""
+    },
+    {
+      "Prefix": 24,
+      "DNS": "",
+      "IP": "",
+      "Switch": "Default Switch",
+      "GW": ""
+    },
+    {
+      "Prefix": 24,
+      "DNS": "",
+      "IP": "",
+      "Switch": "Default Switch",
+      "GW": ""
+    }
+  ],
+  "CPU": 2,
+  "UseIP": false,
+  "DisableCAD": true,
+  "ADRole": 0,
+  "RoleBackup": false,
+  "ISCSIDiskGB": 10,
+  "ISCSIPortalIP": "",
+  "UseAD": false,
+  "VHDPath": "D:\\Hyper-V\\win2022.vhdx",
+  "ISCSIDiskPath": "C:\\iSCSIVirtualDisks\\Disk01.vhdx",
+  "BasePath": "D:\\Hyper-V",
+  "RoleiSCSITarget": false,
+  "RoleIIS": false,
+  "Domain": "contoso2022.local",
+  "DomainAdmin": "contoso2022\\administrator",
+  "ISCSIInitIPs": "",
+  "Memory": 4,
+  "NestedVM": false,
+  "DomainAdminPass": "TS12345!",
+  "Password": "TS12345!",
+  "NICCount": 2,
+  "VMName": "win2022sv",
+  "AutoLogon": true,
+  "RoleiSCSIInit": false
+}
