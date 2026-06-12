@@ -1,8 +1,10 @@
-# 管理者権限チェック（非管理者でも起動可能、一部機能が制限される）
+﻿# 管理者権限チェック（非管理者でも起動可能、一部機能が制限される）
 $script:isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
+[System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false)
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text          = if ($script:isAdmin) { "プロセス & サービス モニター [管理者]" } else { "プロセス & サービス モニター [非管理者 — 一部機能制限]" }
@@ -13,8 +15,8 @@ $form.MinimumSize   = New-Object System.Drawing.Size(700, 460)
 # ================================================================
 # 状態変数
 # ================================================================
-$script:prevSnapshot = @{}   # key:PID, value:@{CPU=double;Time=DateTime}
-$script:logicalCores = [int](Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).NumberOfLogicalProcessors
+$script:prevSnapshot = @{}
+$script:logicalCores = [System.Environment]::ProcessorCount
 if ($script:logicalCores -lt 1) { $script:logicalCores = 1 }
 $script:procSortCol  = 2;  $script:procSortAsc = $false
 $script:svcSortCol   = 0;  $script:svcSortAsc  = $true
@@ -39,7 +41,7 @@ function Get-ProcessData {
                     ($cpuNow - $prev.CPU) / $elapsed / $script:logicalCores * 100, 1))
             }
         }
-        $user = try { $p.UserName } catch { "" }
+        $user = try { $p.UserName ?? "" } catch { "" }
         $result.Add([PSCustomObject]@{
             Name  = $p.ProcessName
             PID   = $p.Id
@@ -102,7 +104,6 @@ $btnKill.Text = "強制終了"; $btnKill.Width = 80
 $btnKill.Location = New-Object System.Drawing.Point(226, 6)
 
 $pnlProcBar.Controls.AddRange(@($lblInterval, $cboInterval, $btnRefresh, $btnKill))
-$tabProc.Controls.Add($pnlProcBar)
 
 # ================================================================
 # プロセスタブ — ListView
@@ -110,13 +111,21 @@ $tabProc.Controls.Add($pnlProcBar)
 $lvProc = New-Object System.Windows.Forms.ListView
 $lvProc.Dock = "Fill"; $lvProc.View = "Details"
 $lvProc.FullRowSelect = $true; $lvProc.GridLines = $true
-$lvProc.Font = New-Object System.Drawing.Font("Consolas", 9)
-$lvProc.Columns.Add("プロセス名", 185) | Out-Null
-$lvProc.Columns.Add("PID",         70) | Out-Null
-$lvProc.Columns.Add("CPU %",       75) | Out-Null
-$lvProc.Columns.Add("メモリ(MB)", 100) | Out-Null
-$lvProc.Columns.Add("ユーザー",   200) | Out-Null
-$tabProc.Controls.Add($lvProc)
+$lvProc.HeaderStyle = [System.Windows.Forms.ColumnHeaderStyle]::Clickable
+$lvProc.Font = New-Object System.Drawing.Font("Meiryo UI", 9)
+$lvProc.Columns.Add("プロセス名",        170) | Out-Null
+$lvProc.Columns.Add("プロセスID",         90) | Out-Null
+$lvProc.Columns.Add("CPU使用率(%)",      100) | Out-Null
+$lvProc.Columns.Add("メモリ使用量(MB)",  130) | Out-Null
+$lvProc.Columns.Add("実行ユーザー",      180) | Out-Null
+
+$tlpProc = New-Object System.Windows.Forms.TableLayoutPanel
+$tlpProc.Dock = "Fill"; $tlpProc.RowCount = 2; $tlpProc.ColumnCount = 1
+$tlpProc.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 36))) | Out-Null
+$tlpProc.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100))) | Out-Null
+$tlpProc.Controls.Add($pnlProcBar, 0, 0)
+$tlpProc.Controls.Add($lvProc, 0, 1)
+$tabProc.Controls.Add($tlpProc)
 
 # ================================================================
 # サービスタブ — ツールバー
@@ -137,7 +146,6 @@ $btnSvcStop.Text = "停止"; $btnSvcStop.Width = 60
 $btnSvcStop.Location = New-Object System.Drawing.Point(180, 6)
 
 $pnlSvcBar.Controls.AddRange(@($chkRunning, $btnSvcStart, $btnSvcStop))
-$tabSvc.Controls.Add($pnlSvcBar)
 
 # ================================================================
 # サービスタブ — ListView
@@ -145,12 +153,20 @@ $tabSvc.Controls.Add($pnlSvcBar)
 $lvSvc = New-Object System.Windows.Forms.ListView
 $lvSvc.Dock = "Fill"; $lvSvc.View = "Details"
 $lvSvc.FullRowSelect = $true; $lvSvc.GridLines = $true
-$lvSvc.Font = New-Object System.Drawing.Font("Consolas", 9)
-$lvSvc.Columns.Add("サービス名", 210) | Out-Null
-$lvSvc.Columns.Add("表示名",     310) | Out-Null
-$lvSvc.Columns.Add("状態",        80) | Out-Null
-$lvSvc.Columns.Add("起動種別",   110) | Out-Null
-$tabSvc.Controls.Add($lvSvc)
+$lvSvc.HeaderStyle = [System.Windows.Forms.ColumnHeaderStyle]::Clickable
+$lvSvc.Font = New-Object System.Drawing.Font("Meiryo UI", 9)
+$lvSvc.Columns.Add("サービス名",    200) | Out-Null
+$lvSvc.Columns.Add("表示名(説明)", 290) | Out-Null
+$lvSvc.Columns.Add("稼働状態",      90) | Out-Null
+$lvSvc.Columns.Add("起動タイプ",   120) | Out-Null
+
+$tlpSvc = New-Object System.Windows.Forms.TableLayoutPanel
+$tlpSvc.Dock = "Fill"; $tlpSvc.RowCount = 2; $tlpSvc.ColumnCount = 1
+$tlpSvc.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 36))) | Out-Null
+$tlpSvc.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100))) | Out-Null
+$tlpSvc.Controls.Add($pnlSvcBar, 0, 0)
+$tlpSvc.Controls.Add($lvSvc, 0, 1)
+$tabSvc.Controls.Add($tlpSvc)
 
 # ================================================================
 # ステータスバー
@@ -172,7 +188,7 @@ function Update-ProcListView {
         $item.SubItems.Add($d.PID.ToString())       | Out-Null
         $item.SubItems.Add("$($d.CPU) %")           | Out-Null
         $item.SubItems.Add($d.MemMB.ToString("N1")) | Out-Null
-        $item.SubItems.Add($d.User)                 | Out-Null
+        $item.SubItems.Add($d.User ?? "")           | Out-Null
         $item.Tag = $d
         if ($d.CPU -ge 20) {
             $item.BackColor = [System.Drawing.Color]::FromArgb(255, 200, 200)
@@ -302,9 +318,12 @@ $form.Add_FormClosing({ $timer.Stop(); $timer.Dispose() })
 # ================================================================
 # 初回データ取得 & タイマー開始
 # ================================================================
-Update-ProcListView
-Update-SvcListView
-$statusLabel.Text = "最終更新: $([DateTime]::Now.ToString('HH:mm:ss'))  プロセス数: $($lvProc.Items.Count)"
-$timer.Start()
-
-[void]$form.ShowDialog()
+try {
+    Update-ProcListView
+    Update-SvcListView
+    $statusLabel.Text = "最終更新: $([DateTime]::Now.ToString('HH:mm:ss'))  プロセス数: $($lvProc.Items.Count)"
+    $timer.Start()
+    [void]$form.ShowDialog()
+} catch {
+    [System.Windows.Forms.MessageBox]::Show("エラー:`n$_`n`n$($_.ScriptStackTrace)", "procmon", "OK", "Error")
+}
